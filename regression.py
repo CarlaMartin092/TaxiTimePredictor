@@ -8,7 +8,7 @@ import feature_engineering
 def preprocess_for_reg(data, train_size = 0.7):
     scaler = StandardScaler().fit(data)
     data_scaled = scaler.transform(data)
-    X_train, y_train, X_test, y_test = train_test_split(data_scaled.drop(["y"]), data_scaled["y"], train_size = train_size)
+    X_train, y_train, X_test, y_test = train_test_split(data_scaled.drop(["y"]), data_scaled["y"], train_size = train_size, shuffle = False)
     return(X_train, y_train, X_test, y_test, scaler)
 
 def fit_regression(X_train, y_train):
@@ -23,7 +23,6 @@ def assess_mae(data, train_size = 0.7):
     return(mean_absolute_error(y_pred, y_test))
 
 def predict_regression(reg, x):
-
     return(reg.predict(x))
 
 
