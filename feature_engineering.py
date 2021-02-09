@@ -1,6 +1,5 @@
 import pandas as pd
 import numpy as np 
-from pathlib import Path
 import os
 
 def feature_engineering():
@@ -11,20 +10,26 @@ def feature_engineering():
 
     taxitime_weather = pd.read_csv(path_to_weather_data)
 
-    print("Datetime conversion -----")
-    taxitime_weather["Flight Datetime"] = pd.to_datetime(taxitime_weather["Flight Datetime"])
-    taxitime_weather.ATOT = pd.to_datetime(taxitime_weather.ATOT)
-    taxitime_weather.AOBT = pd.to_datetime(taxitime_weather.AOBT) 
-    print("Datetime completed -----")
+    #Drop useless columns
+    taxitime_weather = taxitime_weather.drop(["Flight Datetime", "Aircraft Model", "Aircraft Length", "Aircraft Span", "No. Engines", \
+        "Airport Arrival/Departure", "Movement Type", "AOBT", "ATOT"], axis = 1)
 
-    print("Weather cleaning start ----- ")
+    #print("Weather cleaning start ----- ")
     #Weather data cleaning:
-    taxitime_weather.iloc[:,22:] = taxitime_weather.iloc[:,22:].fillna(method = "ffill")
-    print("Weather cleaning completed ----- ")
+    taxitime_weather.loc[:,['summary', 'precipIntensity', 'precipProbability',\
+       'temperature', 'apparentTemperature', 'dewPoint', 'humidity',\
+       'pressure', 'windSpeed', 'windGust', 'windBearing', 'cloudCover',\
+       'uvIndex', 'visibility', 'precipType', 'precipAccumulation', 'ozone']] = taxitime_weather.loc[:,['summary', 'precipIntensity', 'precipProbability',\
+       'temperature', 'apparentTemperature', 'dewPoint', 'humidity',\
+       'pressure', 'windSpeed', 'windGust', 'windBearing', 'cloudCover',\
+       'uvIndex', 'visibility', 'precipType', 'precipAccumulation', 'ozone']].fillna(method = "ffill")
 
-    
-
-    pd.write_csv("../data/")
+    taxitime_weather["night"] = taxitime_weather.icon.apply(lambda summ: 1 if "night" in str(summ) else 0)
+    taxitime_weather["y"] = taxitime_weather["actual_taxi_out_sec"]
+    taxitime_weather = taxitime_weather.drop(['icon', 'actual_taxi_out_sec'], axis = 1)
+    #print("Weather cleaning completed ----- ")
+    print("Number of columns: ", len(taxitime_weather.columns))
+    #pd.to_csv("../data/")
     return(taxitime_weather)
 
 feature_engineering()
