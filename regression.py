@@ -61,20 +61,19 @@ class Regression():
         return(y_pred_rescaled)
     
     def evaluate(self, X_test, y_test):
-        X_test_rescaled = self.x_scaler.transform(X_test)
-        y_test_rescaled = self.y_scaler.transform(np.array(y_test).reshape(-1, 1))
-        y_pred = self.reg.predict(X_test_rescaled)
+        y_pred = self.reg.predict(X_test)
         y_pred_rescaled = self.y_scaler.inverse_transform(y_pred.reshape(-1, 1))
-        return(r2_score(y_test, y_pred_rescaled), mean_absolute_error(y_test, y_pred_rescaled))
+        y_test_rescaled = self.y_scaler.inverse_transform(y_test.reshape(-1, 1))
+        return(r2_score(y_test_rescaled, y_pred_rescaled), mean_absolute_error(y_test_rescaled, y_pred_rescaled))
     
     def get_coef_(self):
         return(self.coef_)
-        
+
     def get_p_values(self):
         return self.p
 
-def run_regression(include_dummies = False, train_size = 0.7, random_state = None):
-    if (os.path.exists("../data/taxitime_variables.csv") and not include_dummies):
+def run_regression(run_feature_engineering = False, include_dummies = False, train_size = 0.7, random_state = None):
+    if (os.path.exists("../data/taxitime_variables.csv") and not run_feature_engineering):
         taxitime_data = pd.read_csv("../data/taxitime_variables.csv")
         taxitime_data = taxitime_data.drop(["Unnamed: 0"], axis = 1)
 
@@ -92,6 +91,6 @@ def run_regression(include_dummies = False, train_size = 0.7, random_state = Non
     print("Prediction for ", reg.x_scaler.inverse_transform(X_test[0,:]).T, ": ",  reg.predict(X_test[0,:]), "\
          True value: ", reg.y_scaler.inverse_transform(y_test[0,:]).T)
 
-run_regression()
+run_regression(run_feature_engineering= False, include_dummies=False)
 
 
