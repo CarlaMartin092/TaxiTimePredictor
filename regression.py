@@ -64,10 +64,12 @@ class Regression():
         X_test_rescaled = self.x_scaler.transform(X_test)
         y_test_rescaled = self.y_scaler.transform(np.array(y_test).reshape(-1, 1))
         y_pred = self.reg.predict(X_test_rescaled)
-        return(r2_score(y_test_rescaled, y_pred), mean_absolute_error(y_test_rescaled, y_pred))
+        y_pred_rescaled = self.y_scaler.inverse_transform(y_pred.reshape(-1, 1))
+        return(r2_score(y_test, y_pred_rescaled), mean_absolute_error(y_test, y_pred_rescaled))
     
     def get_coef_(self):
         return(self.coef_)
+        
     def get_p_values(self):
         return self.p
 
@@ -85,10 +87,11 @@ def run_regression(include_dummies = False, train_size = 0.7, random_state = Non
     print("Coefficients: ", reg.get_coef_())
     print("P-Values: ", reg.get_p_values())
     r2, mae = reg.evaluate(X_test, y_test)
-    #print("R2 Score: ", r2)
+    print("R2 Score: ", r2)
     print("MAE: ", mae)
-    print("Prediction for ", reg.x_scaler.inverse_transform(X_test[0,:]).T, ": ",  reg.predict(X_test[0,:]))
+    print("Prediction for ", reg.x_scaler.inverse_transform(X_test[0,:]).T, ": ",  reg.predict(X_test[0,:]), "\
+         True value: ", reg.y_scaler.inverse_transform(y_test[0,:]).T)
 
-#run_regression()
+run_regression()
 
 
