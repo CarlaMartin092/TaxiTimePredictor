@@ -98,8 +98,14 @@ def run_regression(mode = "train", run_feature_engineering = False, include_dumm
     print("P-Values: ", reg.get_p_values())
 
     if(mode == "test"):
-        test_data = pd.read_csv("../data/taxitime_test_variables.csv")
-        test_data = test_data.drop(["Unnamed: 0"], axis = 1)
+
+        if (os.path.exists("../data/taxitime_test_variables.csv") and not run_feature_engineering):
+            test_data = pd.read_csv("../data/taxitime_test_variables.csv")
+            test_data = test_data.drop(["Unnamed: 0"], axis = 1)
+
+        else: 
+            test_data = ft.feature_engineering(mode = "test", include_dummies = include_dummies)
+
         test_data = test_data.dropna(subset = ["windGust"])
         _, X_test, _, y_test = reg.preprocess(test_data, train_size = 0.01, random_state = random_state)
         r2, mae, accuracy = reg.evaluate(X_test, y_test, interval = 2.0)
