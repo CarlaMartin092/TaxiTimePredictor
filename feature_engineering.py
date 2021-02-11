@@ -70,7 +70,7 @@ def feature_engineering(mode = "train", include_dummies = False):
     weather = weather.drop_duplicates(subset = ["time_hourly"])
     weather["time_hourly"] = pd.to_datetime(weather["time_hourly"])
 
-    weather = weather.drop(['apparentTemperature', 'dewPoint', 'humidity', 'pressure', 'windGust', \
+    weather = weather.drop(['apparentTemperature', 'dewPoint', 'pressure', \
         'windBearing', 'cloudCover', 'precipAccumulation', 'ozone', 'uvIndex', 'precipProbability', 'icon', 'summary'], axis = 1)
 
     airport["Flight Datetime"] = pd.to_datetime(airport["Flight Datetime"])
@@ -108,9 +108,9 @@ def feature_engineering(mode = "train", include_dummies = False):
     taxitime_weather["Q"] = compute_Q(taxitime_weather)
     #print(taxitime_weather["N"])
     #print(taxitime_weather["Q"])
-    taxitime_weather = taxitime_weather.drop(["ATOT", "AOBT"], axis = 1)
+    taxitime_weather = taxitime_weather.drop(["Aircraft Model", "ATOT", "AOBT"], axis = 1)
 
-    taxitime_weather.loc[:,["precipIntensity", "temperature", "windSpeed", "visibility", "precipType"]] =  taxitime_weather.loc[:,["precipIntensity", "temperature", "windSpeed", "visibility", "precipType"]].fillna(method = "ffill")
+    taxitime_weather.loc[:,["precipIntensity", "temperature", "windSpeed", "visibility", "precipType", "windGust", "humidity"]] =  taxitime_weather.loc[:,["precipIntensity", "temperature", "windSpeed", "visibility", "precipType", "windGust", "humidity"]].fillna(method = "ffill")
     #print("NB missing values taxitime_weather: ", np.sum(pd.isna(taxitime_weather)))
 
     if(include_dummies):
@@ -127,13 +127,13 @@ def feature_engineering(mode = "train", include_dummies = False):
         taxitime_weather = taxitime_weather.drop(["precipType", "precipIntensity"], axis = 1)
 
     #print("NB missing values taxitime_weather: ", np.sum(pd.isna(taxitime_weather)))
-
+    print(taxitime_weather.columns)
     path_file = "../data/taxitime_{}_variables.csv".format(mode)
     taxitime_weather.to_csv(path_file)
 
     return(taxitime_weather)
     
-feature_engineering(mode = "test", include_dummies=True)
+#feature_engineering(mode = "train", include_dummies=False)
 
 
 

@@ -7,6 +7,8 @@ from sklearn.metrics import mean_absolute_error, r2_score
 import feature_engineering as ft
 from scipy import stats
 import os
+import metrics
+import matplotlib.pyplot as plt
 
 class Regression():
     """
@@ -33,8 +35,8 @@ class Regression():
         - train_size: float, proportion of the data that is used for training
         - random_state: int or None, sets a random seed
         """
-        X = data.loc[:, data.columns != "y"]
-        y = data.loc[:,"y"]
+        X = data.loc[:, data.columns != "actual_taxi_out_sec"]
+        y = data.loc[:,"actual_taxi_out_sec"]
         self.x_scaler.fit(X)
         self.y_scaler.fit(np.array(y).reshape(-1, 1))
         X_rescaled = self.x_scaler.transform(X)
@@ -55,16 +57,22 @@ class Regression():
         return self
 
     def predict(self, x):
-        x_rescaled = self.x_scaler.transform(x.reshape(1, -1))
-        y_pred = self.reg.predict(x_rescaled.reshape(1, -1))
+        y_pred = self.reg.predict(x.reshape(1, -1))
         y_pred_rescaled = self.y_scaler.inverse_transform(y_pred)
         return(y_pred_rescaled)
     
-    def evaluate(self, X_test, y_test):
+    def evaluate(self, X_test, y_test, interval = 2.0, plot_prediction = True):
         y_pred = self.reg.predict(X_test)
         y_pred_rescaled = self.y_scaler.inverse_transform(y_pred.reshape(-1, 1))
         y_test_rescaled = self.y_scaler.inverse_transform(y_test.reshape(-1, 1))
-        return(r2_score(y_test_rescaled, y_pred_rescaled), mean_absolute_error(y_test_rescaled, y_pred_rescaled))
+
+        if(plot_prediction):
+            plt.plot(y_test_rescaled)
+            plt.plot(y_pred_rescaled)
+            plt.legend(["Ground Truth", "Prediction"])
+            plt.show()
+
+        return(r2_score(y_test_rescaled, y_pred_rescaled), mean_absolute_error(y_test_rescaled, y_pred_rescaled), metrics.accuracy(y_test_rescaled, y_pred_rescaled, interval = interval))
     
     def get_coef_(self):
         return(self.coef_)
@@ -73,8 +81,8 @@ class Regression():
         return self.p
 
 def run_regression(run_feature_engineering = False, include_dummies = False, train_size = 0.7, random_state = None):
-    if (os.path.exists("../data/taxitime_variables.csv") and not run_feature_engineering):
-        taxitime_data = pd.read_csv("../data/taxitime_variables.csv")
+    if (os.path.exists("../data/taxitime_train_variables.csv") and not run_feature_engineering):
+        taxitime_data = pd.read_csv("../data/taxitime_train_variables.csv")
         taxitime_data = taxitime_data.drop(["Unnamed: 0"], axis = 1)
 
     else: 
@@ -85,9 +93,10 @@ def run_regression(run_feature_engineering = False, include_dummies = False, tra
     reg = reg.fit(X_train, y_train)
     print("Coefficients: ", reg.get_coef_())
     print("P-Values: ", reg.get_p_values())
-    r2, mae = reg.evaluate(X_test, y_test)
+    r2, mae, accuracy = reg.evaluate(X_test, y_test, interval = 3.0)
     print("R2 Score: ", r2)
     print("MAE: ", mae)
+    print("Accuracy: ", accuracy)
     print("Prediction for ", reg.x_scaler.inverse_transform(X_test[0,:]).T, ": ",  reg.predict(X_test[0,:]), "\
          True value: ", reg.y_scaler.inverse_transform(y_test[0,:]).T)
 
