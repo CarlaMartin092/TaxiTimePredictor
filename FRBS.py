@@ -1,7 +1,8 @@
 import pandas as pd
 import feature_engineering as ft
 from sklearn.preprocessing import StandardScaler
-from sklearn.cluster import KMeans
+from sklearn.cluster import KMeans 
+from sklearn.mixture import GaussianMixture
 import matplotlib.pyplot as plt 
 from sklearn.manifold import TSNE
 import numpy as np
@@ -29,7 +30,7 @@ class FRBS():
         X_train, X_test, y_train, y_test = train_test_split(X_rescaled, y, train_size = train_size)
         return X_train, X_test, y_train, y_test
 
-    def build_clusters(self, variables, X, y):
+    def build_clusters(self, variables, X, y, clustering = "KMeans"):
 
         outliers = y.quantile(0.95)
         #index_not_outliers = np.where(y[y <= outliers])
@@ -39,9 +40,16 @@ class FRBS():
 
         X_stack_y = np.concatenate((X, np.array(y)[:,None]), axis = 1)
 
-        kmeans = KMeans(self.n_clusters)
-        kmeans.fit(X_stack_y)
-        labels = kmeans.labels_.reshape(-1,1)
+        if(clustering == "KMeans"):
+            kmeans = KMeans(self.n_clusters)
+            kmeans.fit(X_stack_y)
+            labels = kmeans.labels_.reshape(-1,1)
+
+        else:
+            gmm = GaussianMixture(self.n_clusters)
+            gmm.fit(X_stack_y)
+            labels = gmm.predict(X_stack_y).reshape(-1,1)
+
         self.labels = labels
 
         for label in np.unique(labels):
@@ -141,7 +149,7 @@ class FRBS():
             plt.savefig("../data/Rule_cluster{}.png".format(cluster))
         
 
-def run_FRBS(n_clusters, mode = "train", run_feature_engineering = False, include_dummies = False, train_size = 0.99):
+def run_FRBS(n_clusters, mode = "train", run_feature_engineering = False, include_dummies = False, train_size = 0.99, clustering = "KMeans"):
 
     if (os.path.exists("../data/taxitime_train_variables.csv") and not run_feature_engineering):
         taxitime_data = pd.read_csv("../data/taxitime_train_variables.csv")
@@ -157,7 +165,7 @@ def run_FRBS(n_clusters, mode = "train", run_feature_engineering = False, includ
     X_train, _, y_train, _ = model.preprocess(taxitime_data, train_size = train_size)
 
     variables = taxitime_data.columns
-    model.build_clusters(variables, X_train, y_train)
+    model.build_clusters(variables, X_train, y_train, clustering = clustering)
     variables = taxitime_data.columns[taxitime_data.columns != "actual_taxi_out_sec"]
     #print(variables)
     model.show_rules(taxitime_data)
