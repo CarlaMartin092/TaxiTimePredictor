@@ -19,6 +19,7 @@ class FRBS():
     def __init__(self, n_clusters, regression = False):
         self.n_clusters = n_clusters #ex: [2, 3, 6, 2] nb of clusters per y_split
         self.scaler = StandardScaler()
+        self.outliers = 0
 
         self.centroids = defaultdict(lambda: defaultdict(float))
         self.stds = defaultdict(lambda: defaultdict(float))
@@ -26,16 +27,20 @@ class FRBS():
     def preprocess(self, data, train_size):
         X = data.drop(["actual_taxi_out_sec"], axis = 1)
         y = data["actual_taxi_out_sec"]
+
+        self.outliers = y.quantile(0.95)
+
+        y = StandardScaler().fit_transform(np.array(y).reshape(-1, 1)) * 10
         X_rescaled = self.scaler.fit_transform(X)
         X_train, X_test, y_train, y_test = train_test_split(X_rescaled, y, train_size = train_size)
         return X_train, X_test, y_train, y_test
 
     def build_clusters(self, variables, X, y, clustering = "KMeans"):
-
-        outliers = y.quantile(0.95)
+        #y = y[:,None]
+        y = y.reshape(y.shape[0],)
         #index_not_outliers = np.where(y[y <= outliers])
-        y_no_outliers = y[y <= outliers]
-        X = X[y <= outliers]
+        y_no_outliers = y[y <= self.outliers]
+        X = X[y <= self.outliers]
         y = y_no_outliers
 
         X_stack_y = np.concatenate((X, np.array(y)[:,None]), axis = 1)
@@ -122,12 +127,13 @@ class FRBS():
         y_pred = self.y_crisp(clusters, centroids_y, integrals_y, X)
         return(y_pred)
 
-    def evaluate(self, X_test, y_test):
+    def evaluate(self, X_test, y_test, interval = 2, plot_prediction = True):
 
         predictions = [self.predict(X_test[i,:]) for i in range(len(X_test))]
         mae = mean_absolute_error(y_test, predictions)
         r2 = r2_score(y_test, predictions)
-        acc = accuracy(y_test, predictions)
+        acc = accuracy(y_test, predictions, interval=interval)
+
         return(r2, mae, acc)
 
     def show_rules(self, data):
@@ -149,24 +155,25 @@ class FRBS():
             plt.savefig("../data/Rule_cluster{}.png".format(cluster))
         
 
-def run_FRBS(n_clusters, mode = "train", run_feature_engineering = False, include_dummies = False, train_size = 0.99, clustering = "KMeans"):
+def run_FRBS(n_clusters, mode = "train", accuracy = 2, run_feature_engineering = False, include_dummies = False, train_size = 0.99, clustering = "KMeans", plot_prediction = True):
 
     if (os.path.exists("../data/taxitime_train_variables.csv") and not run_feature_engineering):
         taxitime_data = pd.read_csv("../data/taxitime_train_variables.csv")
         taxitime_data = taxitime_data.drop(["Unnamed: 0"], axis = 1)
 
     else: 
+        print("Preprocessing training data ------ ")
         taxitime_data = ft.feature_engineering(mode = "train", include_dummies = include_dummies)
 
     #print(taxitime_data.head())
     taxitime_data = taxitime_data[["Log_distance_m","N","Q","windSpeed","visibility","humidity","windGust","Distance_std","actual_taxi_out_sec"]]
-    print(taxitime_data.head())
+    #print(taxitime_data.head())
     model = FRBS(n_clusters)
     X_train, _, y_train, _ = model.preprocess(taxitime_data, train_size = train_size)
 
     variables = taxitime_data.columns
+    print("Fitting model ----- ")
     model.build_clusters(variables, X_train, y_train, clustering = clustering)
-    variables = taxitime_data.columns[taxitime_data.columns != "actual_taxi_out_sec"]
     #print(variables)
     model.show_rules(taxitime_data)
 
@@ -176,15 +183,18 @@ def run_FRBS(n_clusters, mode = "train", run_feature_engineering = False, includ
             test_data = test_data.drop(["Unnamed: 0"], axis = 1)
 
         else: 
+            print("Preprocessing testing data ------ ")
             test_data = ft.feature_engineering(mode = "test", include_dummies = include_dummies)
 
         test_data = test_data[["Log_distance_m","N","Q","windSpeed","visibility","humidity","windGust","Distance_std","actual_taxi_out_sec"]]
         test_data = test_data.dropna(subset = ["windGust"])
         _, X_test, _, y_test = model.preprocess(test_data, train_size = 0.01)
-        r2, mae, accuracy = model.evaluate(X_test, y_test)
+
+        print("Evaluating model ----- ")
+        r2, mae, accuracy = model.evaluate(X_test, y_test, interval = accuracy, plot_prediction = plot_prediction)
         print("Performances on test data: ")
         print("R2: ", r2)
         print("MAE: ", mae)
         print("Accuracy: ", accuracy)
     
-run_FRBS(11, mode = "test")
+#run_FRBS(11, mode = "test")
