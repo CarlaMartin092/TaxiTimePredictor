@@ -18,7 +18,7 @@ class MA60():
 
     def __init__(self):
         """
-        Initializes dataframe
+        Initializes dataframes necessary to perform computations
         """
         self.df = []
         self.df_format = []
@@ -27,6 +27,14 @@ class MA60():
         """
         Compute number of flight per day
         Group by flight date to compute average taxi time
+
+        Args:
+        - date: datetime object - obtain daily taxi times
+        - df: pandas dataframe to manipulate
+
+        Returns:
+        - df_format: pandas dataframe to calculate daily taxi time
+
         """
         self.df = df
         self.df['nb_flights_per_day'] = np.array(1)
@@ -37,6 +45,12 @@ class MA60():
         """
         Fill MA by nan so first 60 days of df are not empty
         Smooth for christmas, take average of christmas days as there is 5 to 6times less flights these dates
+
+        Args:
+        - df_format: pandas dataframe with dates as index
+
+        Returns:
+        - df_format: pandas dataframe with 60 MA values smoothed for christmas
         """
         self.df_format = df_format
         self.df_format["60 days MA"] = np.nan
@@ -60,6 +74,13 @@ class MA60():
     def merge(self, df_format, date):
         """
         Merging the grouped by df with initial df so that every flight has a daily average
+
+        Args:
+        - date: datetime object, to perform merge operation on
+        - df_format: pandas df to perform merge operation with, on inital df
+
+        Returns:
+
         """
         self.df = pd.merge(self.df, df_format, on = date)
         self.df = self.df[['actual_taxi_out_min_x', 'Flight Date', '60 days MA']].rename(columns={"actual_taxi_out_min_x": "actual_taxi_out_min"})
@@ -67,19 +88,28 @@ class MA60():
 
 
     def get_acc_metrics(self, df, split, interval):
-           """
-           Calculate MAE, RMSE, confidence interval
-           """
-           train_size= int(split*len(self.df))
-           train_set = df[:train_size]
-           test_set = df[train_size:]
+        """
+        Calculate MAE, RMSE, confidence interval of predictions under 2minutes of true value
+        on test set of size (1-split)%
 
-           mae = mean_absolute_error(test_set['actual_taxi_out_min'], test_set['60 days MA'])
-           rmse =  np.sqrt(mean_squared_error(test_set['actual_taxi_out_min'], test_set['60 days MA']))
-           acc_int = np.abs(test_set['actual_taxi_out_min'] - test_set['60 days MA'])
-           acc_int = acc_int <= interval
-           acc_int = np.mean(acc_int)
-           return mae, rmse, acc_int
+        Args:
+        - df: pandas df - to perform operations on
+        - split: int - to split dataset
+        - interval: int - interval of minutes
+
+        Returns:
+        - MAE, RMSE, confidence interval
+        """
+        train_size= int(split*len(self.df))
+        train_set = df[:train_size]
+        test_set = df[train_size:]
+
+        mae = mean_absolute_error(test_set['actual_taxi_out_min'], test_set['60 days MA'])
+        rmse =  np.sqrt(mean_squared_error(test_set['actual_taxi_out_min'], test_set['60 days MA']))
+        acc_int = np.abs(test_set['actual_taxi_out_min'] - test_set['60 days MA'])
+        acc_int = acc_int <= interval
+        acc_int = np.mean(acc_int)
+        return mae, rmse, acc_int
 
 
 def run():
