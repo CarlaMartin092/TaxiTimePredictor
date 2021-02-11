@@ -66,16 +66,20 @@ class MA60():
         return self.df
 
 
-    def get_mae_on_test(self, df, split):
-        """
-        calcule mean absolute error on test set
-        """
-        train_size= int(split*len(self.df))
-        train_set = df[:train_size]
-        test_set = df[train_size:]
+    def get_acc_metrics(self, df, split, interval):
+           """
+           Calculate MAE, RMSE, confidence interval
+           """
+           train_size= int(split*len(self.df))
+           train_set = df[:train_size]
+           test_set = df[train_size:]
 
-        mae = mean_absolute_error(test_set['60 days MA'] ,test_set['actual_taxi_out_min'])
-        return mae
+           mae = mean_absolute_error(test_set['actual_taxi_out_min'], test_set['60 days MA'])
+           rmse =  np.sqrt(mean_squared_error(test_set['actual_taxi_out_min'], test_set['60 days MA']))
+           acc_int = np.abs(test_set['actual_taxi_out_min'] - test_set['60 days MA'])
+           acc_int = acc_int <= interval
+           acc_int = np.mean(acc_int)
+           return mae, rmse, acc_int
 
 
 def run():
@@ -88,5 +92,5 @@ def run():
     df_format = ma.format('Flight Date',df)
     get_mean = ma.get_mean(df_format)
     df = ma.merge(get_mean, 'Flight Date')
-    mae = ma.get_mae_on_test(df, 0.7)
-    return df, mae
+    mae, rmse, acc_int = ma.get_acc_metrics(df, 0.7, 2)
+    return df, mae, rmse, acc_int
