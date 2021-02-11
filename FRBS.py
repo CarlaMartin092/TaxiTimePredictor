@@ -9,6 +9,8 @@ from collections import defaultdict
 import seaborn as sns
 from sklearn.model_selection import train_test_split
 import os
+import math
+
 
 class FRBS():
     def __init__(self, n_clusters, regression = False):
@@ -43,7 +45,47 @@ class FRBS():
             self.stds[label]["actual_taxi_out_sec"] = y.ravel()[index].std()
         return
 
-    #def predict(self, y):
+    def total_membership(self, cluster,x):
+
+        result = 1
+        variables = list(centroids[cluster].keys())
+        for v in range(len(variables)):
+            if variables[v] == "actual_taxi_out_sec" or variables[v] == "label": continue
+            result*=membership(cluster, variables[v], x[v])
+        if(np.sum(result) == 0): result+=1e-6
+        return result
+
+    def output_membership(self, cluster, y):
+        centroid_y = self.centroids[cluster]["actual_taxi_out_sec"]
+        std_y = self.stds[cluster]["actual_taxi_out_sec"]
+        den = 1 + ((y - centroid_y)/(std_y + 1e-5))**2
+        return (1/den)
+
+    def compute_integral(self, cluster, y_set):
+        """
+        Computes the discretized version of the integral of the output membership for a given cluster i.
+        """
+        centroid_y = self.centroids[cluster]["actual_taxi_out_sec"]
+        std_y = self.stds[cluster]["actual_taxi_out_sec"]
+        integral = std_y * (math.pi/2 - math.atan(-centroid_y/std_y))
+        return(integral + 1e-6)
+
+    def y_crisp(self, clusters, centroids_y, integrals_y, x):
+        """
+        Computes the y_crisp value described in the paper "On the Utilisation of Fuzzy Rule-Based Systems
+    for Taxi Time Estimations at Airports", Chen et al.
+
+        Arguments:
+        - clusters: list of strings, list of clusters names
+        - y_set: np.array, training set of y values
+        - x: np.array, indenpendent variables associated to y
+        """
+        integrals = integrals_y
+        total_membership_values = np.array([self.total_membership(c, x) for c in clusters])
+        sum_integral_clusters = np.sum(total_membership_values * integrals)
+        weighted_sum = np.sum(centroids_y * total_membership_values * integrals)
+        if(np.isnan(weighted_sum/sum_integral_clusters)): print("Nan in y_crisp ", "num = ",  weighted_sum, "den = ", sum_integral_clusters, "mb values = ", total_membership_values)
+        return(weighted_sum/sum_integral_clusters)
 
 
 def run_FRBS(n_clusters, run_feature_engineering = False, include_dummies = False, train_size = 0.7):
