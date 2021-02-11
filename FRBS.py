@@ -18,7 +18,8 @@ import math
 class FRBS():
     def __init__(self, n_clusters, regression = False):
         self.n_clusters = n_clusters #ex: [2, 3, 6, 2] nb of clusters per y_split
-        self.scaler = StandardScaler()
+        #self.x_scaler = StandardScaler()
+        #self.y_scaler = StandardScaler()
         self.outliers = 0
 
         self.centroids = defaultdict(lambda: defaultdict(float))
@@ -30,45 +31,69 @@ class FRBS():
 
         self.outliers = y.quantile(0.95)
 
-        y = StandardScaler().fit_transform(np.array(y).reshape(-1, 1)) * 10
-        X_rescaled = self.scaler.fit_transform(X)
+        y = self.y_scaler.fit_transform(np.array(y).reshape(-1, 1)) * 10
+        X_rescaled = self.x_scaler.fit_transform(X)
         X_train, X_test, y_train, y_test = train_test_split(X_rescaled, y, train_size = train_size)
         return X_train, X_test, y_train, y_test
 
-    def build_clusters(self, variables, X, y, clustering = "KMeans"):
-        #y = y[:,None]
-        y = y.reshape(y.shape[0],)
-        #index_not_outliers = np.where(y[y <= outliers])
-        y_no_outliers = y[y <= self.outliers]
-        X = X[y <= self.outliers]
-        y = y_no_outliers
+    def build_clusters(self, variables, df, clustering = "KMeans"):
+        """Builds the clusters which will be used as fuzzy rules during the decision making process. K-Means is used as default, but other clustering
+        algorithms such as Gaussian Mixture Models can be used. We multiply by a constant (10) to increase the importance of y during the clustering, 
+        to have better clusters.
 
-        X_stack_y = np.concatenate((X, np.array(y)[:,None]), axis = 1)
+        The dictionaries "centroids" and "stds" store the values of the centroids and standard deviations, respectively, for each cluster.
+
+        Args:
+            variables ([list]): [list of variables to feed to the model (in the correct order)]
+            X ([NumPy array]): [Array containing the predictors, in the order precised in the variables list]
+            y ([NumPy array]): [Array containing the target values]
+        """
+
+        #y = y[:,None]
+        outliers = df["actual_taxi_out_sec"].quantile(0.95)
+        df = df[df["actual_taxi_out_sec"]<outliers]
+        sc2 = StandardScaler()
+        scaled = sc2.fit_transform(df)  
+        scaled[:,-1] *= 10
 
         if(clustering == "KMeans"):
             kmeans = KMeans(self.n_clusters)
-            kmeans.fit(X_stack_y)
+            kmeans.fit(scaled)
             labels = kmeans.labels_.reshape(-1,1)
 
         else:
             gmm = GaussianMixture(self.n_clusters)
-            gmm.fit(X_stack_y)
-            labels = gmm.predict(X_stack_y).reshape(-1,1)
+            gmm.fit(scaled)
+            labels = gmm.predict(scaled).reshape(-1,1)
 
-        self.labels = labels
+        df["labels"] = labels
 
-        for label in np.unique(labels):
-            index = np.where(labels == label)[0]
-            
-            for i in range(X_stack_y.shape[1]):
-                self.centroids[label][variables[i]] = X_stack_y[:,i].ravel()[index].mean()
-                self.stds[label][variables[i]] = X_stack_y[:,i].ravel()[index].std()
+        cols = df.columns
 
-            #self.centroids[label]["actual_taxi_out_sec"] = y.ravel()[index].mean()
-            #self.stds[label]["actual_taxi_out_sec"] = y.ravel()[index].std()
+        for i in range(self.n_clusters):
+            sub_df = df[df["labels"]==i]
+            print(len(sub_df))
+            for j in range(len(cols)-1):
+                self.centroids["cluster_{}".format(i)][cols[j]] = sub_df.mean()[j]
+                self.stds["cluster_{}".format(i)][cols[j]] = sub_df.std()[j]
+
+        print(self.centroids)
+        print(self.stds)
         return
 
     def membership(self, cluster, variable, x):
+        """Computes the membership value of x to the given cluster for a given variable. This is described in the paper "On the Utilisation of Fuzzy Rule-Based Systems
+        for Taxi Time Estimations at Airports", Chen et al.
+
+        Args:
+            cluster ([String]): [Name of the cluster]
+            variable ([String]): [Name of the variable]
+            x ([float]): [Value of which we want to compute membership]
+
+        Returns:
+            [float]: [membership value of the given x to the given cluster and varibale. Value between 0 and 1]
+        """
+
         centroid = self.centroids[cluster][variable]
         #print(centroid)
         std = self.stds[cluster][variable]
@@ -78,7 +103,16 @@ class FRBS():
         return result 
 
     def total_membership(self, cluster,x):
+        """For a given cluster and a given instance x, this function computes the total membership of the instance x to the cluster. 
+        It does so by computing the product of the membership functions of the cluster for all variables of this instance x.
 
+        Args:
+            cluster ([String]): [Name of cluster]
+            x ([NumPy Array]): [Instance of the descriptors dataset. Dimensions: 1*(number of variables)]
+
+        Returns:
+            [Float]: [Total membership. Value between 0 and 1]
+        """
         result = 1
         variables = list(self.centroids[cluster].keys())
         for v in range(len(variables)):
@@ -88,6 +122,17 @@ class FRBS():
         return result
 
     def output_membership(self, cluster, y):
+        """Computes the membership value of the target variable y to the given cluster. This is described in the paper "On the Utilisation of Fuzzy Rule-Based Systems
+        for Taxi Time Estimations at Airports", Chen et al.
+
+
+        Args:
+            cluster ([String]): [Name of cluster]
+            y ([Float]): [Value of which we want to compute membership]
+
+        Returns:
+            [Float]: [Membership value of the given y to the given cluster. Value between 0 and 1]
+        """
         centroid_y = self.centroids[cluster]["actual_taxi_out_sec"]
         std_y = self.stds[cluster]["actual_taxi_out_sec"]
         den = 1 + ((y - centroid_y)/(std_y + 1e-5))**2
@@ -137,6 +182,12 @@ class FRBS():
         return(r2, mae, acc)
 
     def show_rules(self, data):
+        """Plots and saves the membership functions of all variables for each cluster. This allows to interpret and understand the fuzzy rules created
+        by the clustering algorithm.
+
+        Args:
+            data ([Pandas DataFrame]): [Dataset ]
+        """
         cols = data.columns
         #cols = cols[cols != "actual_taxi_out_sec"]
         percentiles = data[cols].quantile([0.05,0.95])
@@ -166,14 +217,15 @@ def run_FRBS(n_clusters, mode = "train", accuracy = 2, run_feature_engineering =
         taxitime_data = ft.feature_engineering(mode = "train", include_dummies = include_dummies)
 
     #print(taxitime_data.head())
-    taxitime_data = taxitime_data[["Log_distance_m","N","Q","windSpeed","visibility","humidity","windGust","Distance_std","actual_taxi_out_sec"]]
+    taxitime_data = taxitime_data[["Log_distance_m", "N", "Q", "windSpeed", "visibility","humidity","windGust","Distance_std","actual_taxi_out_sec"]]
     #print(taxitime_data.head())
     model = FRBS(n_clusters)
-    X_train, _, y_train, _ = model.preprocess(taxitime_data, train_size = train_size)
 
     variables = taxitime_data.columns
     print("Fitting model ----- ")
-    model.build_clusters(variables, X_train, y_train, clustering = clustering)
+    X = taxitime_data.drop(["actual_taxi_out_sec"], axis = 1)
+    y = taxitime_data["actual_taxi_out_sec"]
+    model.build_clusters(variables, taxitime_data, clustering = clustering)
     #print(variables)
     model.show_rules(taxitime_data)
 
@@ -188,7 +240,9 @@ def run_FRBS(n_clusters, mode = "train", accuracy = 2, run_feature_engineering =
 
         test_data = test_data[["Log_distance_m","N","Q","windSpeed","visibility","humidity","windGust","Distance_std","actual_taxi_out_sec"]]
         test_data = test_data.dropna(subset = ["windGust"])
-        _, X_test, _, y_test = model.preprocess(test_data, train_size = 0.01)
+        
+        X_test = np.array(test_data.drop(["actual_taxi_out_sec"], axis = 1))
+        y_test = np.array(test_data["actual_taxi_out_sec"])
 
         print("Evaluating model ----- ")
         r2, mae, accuracy = model.evaluate(X_test, y_test, interval = accuracy, plot_prediction = plot_prediction)

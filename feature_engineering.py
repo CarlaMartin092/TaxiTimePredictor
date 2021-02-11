@@ -3,6 +3,10 @@ import numpy as np
 import os
 
 def compute_N(df):
+    """
+    Computes the number of aircrafts taxiing at the same time as another 
+    """
+
     df = df.sort_values('AOBT')
     AOBT = list(df["AOBT"])
     ATOT = list(df["ATOT"])
