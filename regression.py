@@ -80,7 +80,8 @@ class Regression():
     def get_p_values(self):
         return self.p
 
-def run_regression(run_feature_engineering = False, include_dummies = False, train_size = 0.7, random_state = None):
+def run_regression(mode = "train", run_feature_engineering = False, include_dummies = False, train_size = 0.7, random_state = None):
+
     if (os.path.exists("../data/taxitime_train_variables.csv") and not run_feature_engineering):
         taxitime_data = pd.read_csv("../data/taxitime_train_variables.csv")
         taxitime_data = taxitime_data.drop(["Unnamed: 0"], axis = 1)
@@ -89,17 +90,24 @@ def run_regression(run_feature_engineering = False, include_dummies = False, tra
         taxitime_data = ft.feature_engineering(include_dummies = include_dummies)
 
     reg = Regression()
-    X_train, X_test, y_train, y_test = reg.preprocess(taxitime_data, train_size = train_size, random_state = random_state)
+    taxitime_data = taxitime_data.dropna(subset = ["windGust"])
+    #print(np.sum(pd.isna(taxitime_data)))
+    X_train, _, y_train, _ = reg.preprocess(taxitime_data, train_size = 0.99, random_state = random_state)
     reg = reg.fit(X_train, y_train)
     print("Coefficients: ", reg.get_coef_())
     print("P-Values: ", reg.get_p_values())
-    r2, mae, accuracy = reg.evaluate(X_test, y_test, interval = 3.0)
-    print("R2 Score: ", r2)
-    print("MAE: ", mae)
-    print("Accuracy: ", accuracy)
-    print("Prediction for ", reg.x_scaler.inverse_transform(X_test[0,:]).T, ": ",  reg.predict(X_test[0,:]), "\
-         True value: ", reg.y_scaler.inverse_transform(y_test[0,:]).T)
 
-run_regression(run_feature_engineering= False, include_dummies=False)
+    if(mode == "test"):
+        test_data = pd.read_csv("../data/taxitime_test_variables.csv")
+        test_data = test_data.drop(["Unnamed: 0"], axis = 1)
+        test_data = test_data.dropna(subset = ["windGust"])
+        _, X_test, _, y_test = reg.preprocess(test_data, train_size = 0.01, random_state = random_state)
+        r2, mae, accuracy = reg.evaluate(X_test, y_test, interval = 2.0)
+        print("R2 Score: ", r2)
+        print("MAE: ", mae)
+        print("Accuracy: ", accuracy)
+    #print("Prediction for ", reg.x_scaler.inverse_transform(X_test[0,:]).T, ": ",  reg.predict(X_test[0,:]), "\True value: ", reg.y_scaler.inverse_transform(y_test[0,:]).T)
+
+run_regression(mode = "test")
 
 
