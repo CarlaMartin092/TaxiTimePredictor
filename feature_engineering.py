@@ -36,6 +36,18 @@ def compute_Q(df):
     res = [v for (k, v) in sorted(Q.items())]
     return res
 
+def wind_direction(x):
+    if 315.0 < x <= 360.0:
+        return 'North'
+    if 0.0 <= x <= 45.0:
+        return 'North'
+    if 45.0 < x <= 135.0:
+        return 'East'
+    if 135.0 < x <= 225.0:
+        return 'South'
+    if 225.0 < x <= 315.0:
+        return 'West'
+
 def feature_engineering(mode = "train", include_dummies = False):
     #print(os.path.dirname(__file__))
     if(mode == "train"):
@@ -70,8 +82,7 @@ def feature_engineering(mode = "train", include_dummies = False):
     weather = weather.drop_duplicates(subset = ["time_hourly"])
     weather["time_hourly"] = pd.to_datetime(weather["time_hourly"])
 
-    weather = weather.drop(['apparentTemperature', 'dewPoint', 'pressure', \
-        'windBearing', 'cloudCover', 'precipAccumulation', 'ozone', 'uvIndex', 'precipProbability', 'icon', 'summary'], axis = 1)
+    weather = weather.drop(['apparentTemperature', 'dewPoint', 'pressure', 'cloudCover', 'precipAccumulation', 'ozone', 'uvIndex', 'precipProbability', 'icon', 'summary'], axis = 1)
 
     airport["Flight Datetime"] = pd.to_datetime(airport["Flight Datetime"])
     airport["AOBT"] = pd.to_datetime(airport["AOBT"])
@@ -94,31 +105,34 @@ def feature_engineering(mode = "train", include_dummies = False):
 
     distances = distance_mean.merge(distance_std, on = ['Stand','Runway'])
 
+    #airport = airport.merge(extended[['Aircraft Model', 'AC_size']], how = 'left', on = ["Aircraft Model"])
     airport = airport.merge(distances, how = "left", on = ['Stand', 'Runway'])
     airport = airport.drop(['Stand', 'Runway'], axis = 1)
 
     taxitime_weather = airport.merge(weather, how = "left", on = 'time_hourly')
 
     taxitime_weather["morning_mode"] = taxitime_weather['time_hourly'].dt.hour.apply(lambda h: 1 if (h >= 5) and (h <= 18) else 0)
+    taxitime_weather["summer"] = taxitime_weather["time_hourly"].dt.month.apply(lambda x: 1 if x in [5, 6, 7, 8, 9, 10] else 0)
     taxitime_weather = taxitime_weather.drop(["time_hourly", "Flight Datetime"], axis = 1)
 
     taxitime_weather["Log_distance_m"] = np.log(taxitime_weather["Distance_proxy_m"])
     taxitime_weather["actual_taxi_out_sec"] = (taxitime_weather["ATOT"] - taxitime_weather["AOBT"]) / np.timedelta64(1, 's')
     taxitime_weather["N"] = compute_N(taxitime_weather)
     taxitime_weather["Q"] = compute_Q(taxitime_weather)
+    taxitime_weather["windBearing"] = taxitime_weather["windBearing"].apply(lambda x: wind_direction(x))
     #print(taxitime_weather["N"])
     #print(taxitime_weather["Q"])
     taxitime_weather = taxitime_weather.drop(["Aircraft Model", "ATOT", "AOBT"], axis = 1)
 
-    taxitime_weather.loc[:,["precipIntensity", "temperature", "windSpeed", "visibility", "precipType", "windGust", "humidity"]] =  taxitime_weather.loc[:,["precipIntensity", "temperature", "windSpeed", "visibility", "precipType", "windGust", "humidity"]].fillna(method = "ffill")
+    taxitime_weather.loc[:,["precipIntensity", "temperature", "windSpeed", "visibility", "precipType", "windGust", "humidity", "windBearing"]] =  taxitime_weather.loc[:,["precipIntensity", "temperature", "windSpeed", "visibility", "precipType", "windGust", "humidity", "windBearing"]].fillna(method = "ffill")
+    
     #print("NB missing values taxitime_weather: ", np.sum(pd.isna(taxitime_weather)))
 
     if(include_dummies):
 
         taxitime_weather["precipType"] = taxitime_weather["precipType"].apply(lambda w: w if w == "rain" else "None")
-        taxitime_weather = pd.get_dummies(taxitime_weather, columns = ["precipType"])
-        taxitime_weather = taxitime_weather.drop(['precipType_None'], axis = 1)
-        #taxitime_weather['precipType_snow'] = taxitime_weather["precipIntensity"] * taxitime_weather['precipType_snow']
+        taxitime_weather = pd.get_dummies(taxitime_weather, columns = ["precipType", "windBearing"])
+        taxitime_weather = taxitime_weather.drop(['precipType_None', "windBearing_West"], axis = 1)
         taxitime_weather['precipType_rain'] = taxitime_weather["precipIntensity"] * taxitime_weather['precipType_rain']
         taxitime_weather['precipType_rain'] = taxitime_weather['precipType_rain'].fillna(0)
         taxitime_weather = taxitime_weather.drop(["precipIntensity"], axis = 1)
@@ -126,14 +140,15 @@ def feature_engineering(mode = "train", include_dummies = False):
     else:
         taxitime_weather = taxitime_weather.drop(["precipType", "precipIntensity"], axis = 1)
 
-    #print("NB missing values taxitime_weather: ", np.sum(pd.isna(taxitime_weather)))
+    print("NB missing values taxitime_weather: ", np.sum(pd.isna(taxitime_weather)))
     print(taxitime_weather.columns)
     path_file = "../data/taxitime_{}_variables.csv".format(mode)
     taxitime_weather.to_csv(path_file)
 
     return(taxitime_weather)
     
-#feature_engineering(mode = "train", include_dummies=False)
+#feature_engineering(mode = "train", include_dummies=True)
+#feature_engineering(mode = "test", include_dummies=True)
 
 
 
