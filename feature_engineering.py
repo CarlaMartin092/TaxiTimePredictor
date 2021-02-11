@@ -2,6 +2,40 @@ import pandas as pd
 import numpy as np 
 import os
 
+def compute_N(df):
+    df = df.sort_values('AOBT')
+    AOBT = list(df["AOBT"])
+    ATOT = list(df["ATOT"])
+    n_flights = len(AOBT)
+    N = {}
+    index = list(df.index)
+    for i in range(n_flights):
+        if(i == 0): N[index[i]] = 0
+        else:
+            k = 1
+            while(i - k >= 0 and AOBT[i] >= AOBT[i - k] and ATOT[i - k] >= AOBT[i]):
+                k+=1
+            N[index[i]] = k - 1
+    res = [v for (k, v) in sorted(N.items())]
+    return res
+
+def compute_Q(df):
+    df = df.sort_values('ATOT')
+    AOBT = list(df["AOBT"])
+    ATOT = list(df["ATOT"])
+    n_flights = len(AOBT)
+    Q = {}
+    index = list(df.index)
+    for i in range(n_flights):
+        if(i == 0): Q[index[i]] = 0
+        else:
+            k = 1
+            while(i - k >= 0 and AOBT[i] <= ATOT[i - k] and ATOT[i] >= ATOT[i - k]):
+                k+=1
+            Q[index[i]] = k - 1
+    res = [v for (k, v) in sorted(Q.items())]
+    return res
+
 def feature_engineering(mode = "train", include_dummies = False):
     #print(os.path.dirname(__file__))
     if(mode == "train"):
@@ -70,6 +104,10 @@ def feature_engineering(mode = "train", include_dummies = False):
 
     taxitime_weather["Log_distance_m"] = np.log(taxitime_weather["Distance_proxy_m"])
     taxitime_weather["actual_taxi_out_sec"] = (taxitime_weather["ATOT"] - taxitime_weather["AOBT"]) / np.timedelta64(1, 's')
+    taxitime_weather["N"] = compute_N(taxitime_weather)
+    taxitime_weather["Q"] = compute_Q(taxitime_weather)
+    #print(taxitime_weather["N"])
+    #print(taxitime_weather["Q"])
     taxitime_weather = taxitime_weather.drop(["ATOT", "AOBT"], axis = 1)
 
     taxitime_weather.loc[:,["precipIntensity", "temperature", "windSpeed", "visibility", "precipType"]] =  taxitime_weather.loc[:,["precipIntensity", "temperature", "windSpeed", "visibility", "precipType"]].fillna(method = "ffill")
